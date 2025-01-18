@@ -31,7 +31,8 @@ app = FastAPI(
     title="Box8 API",
     description="API Backend pour Box8",
     version="1.0.0",
-    redirect_slashes=True
+    # Set to False to handle URLs with and without trailing slashes the same way
+    redirect_slashes=False
 )
 
 # Chargement des variables d'environnement

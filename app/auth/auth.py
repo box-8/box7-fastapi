@@ -112,17 +112,18 @@ async def get_current_user(session: Optional[str] = Cookie(None)) -> Optional[di
 async def login_user(response: Response, user_data: UserLogin):
     """Logique de connexion d'un utilisateur"""
     try:
+        logger.info(f"Attempting login for user: {user_data.email}")
         user = authenticate_user(user_data.email, user_data.password)
+        
         if not user:
+            logger.warning(f"Failed login attempt for user: {user_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email ou mot de passe incorrect"
             )
 
-        logger.info(f"Login attempt for user: {user_data.email}")
-        
         if not user["is_active"]:
-            logger.warning(f"Inactive user attempted login: {user_data.email}")
+            logger.warning(f"Login attempt for inactive user: {user_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Compte désactivé"
@@ -137,6 +138,7 @@ async def login_user(response: Response, user_data: UserLogin):
         # Configuration du cookie de session
         is_production = os.getenv("ENVIRONMENT", "development") == "production"
         
+        logger.info(f"Setting cookie for user: {user_data.email} (secure: {is_production})")
         response.set_cookie(
             key="session",
             value=access_token,
@@ -159,7 +161,7 @@ async def login_user(response: Response, user_data: UserLogin):
             }
         }
     except Exception as e:
-        logger.error(f"Login error for user {user_data.email}: {str(e)}")
+        logger.error(f"Unexpected error during login for user {user_data.email}: {str(e)}")
         raise
 
 async def register_user(user_data: UserRegistration):
