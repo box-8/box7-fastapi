@@ -5,12 +5,13 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from uuid import uuid4
 from passlib.context import CryptContext
+import os
 
 from app.models.user import User, UserLogin, UserRegistration
 from app.database.database import get_user_by_email, create_user, check_user_exists
 
 # Configuration de la sécurité
-SECRET_KEY = "votre_clé_secrète_ici"  # À changer en production
+SECRET_KEY = os.getenv("SECRET_KEY", "votre_clé_secrète_ici")  # À changer en production
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -132,7 +133,8 @@ async def login_user(response: Response, user_data: UserLogin):
         httponly=True,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
-        secure=False  # Mettre à True en production avec HTTPS
+        secure=True,  # Nécessaire pour HTTPS sur Heroku
+        domain=os.getenv("COOKIE_DOMAIN", None)  # Domaine pour Heroku
     )
 
     return {
@@ -196,7 +198,8 @@ async def logout_user(response: Response, session: Optional[str] = Cookie(None))
         key="session",
         httponly=True,
         samesite="lax",
-        secure=False  # Mettre à True en production avec HTTPS
+        secure=True,  # Nécessaire pour HTTPS sur Heroku
+        domain=os.getenv("COOKIE_DOMAIN", None)  # Domaine pour Heroku
     )
     
     return {"message": "Déconnecté avec succès"}

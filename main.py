@@ -519,7 +519,14 @@ async def health_check():
 # Route de test
 @app.get("/")
 async def root():
-    return {"message": "Box8 API is running"}
+    """
+    Route de test qui affiche les variables d'environnement CORS
+    """
+    cors_env = {
+        "FRONTEND_URL": os.getenv("FRONTEND_URL", "http://localhost:3000"),
+        "FRONTEND_URL_ALTERNATIVE": os.getenv("FRONTEND_URL_ALTERNATIVE", "http://127.0.0.1:3000")
+    }
+    return {"message": "Box8 API", "cors_config": cors_env}
 
 # Point d'entrée pour lancer l'application
 if __name__ == "__main__":
