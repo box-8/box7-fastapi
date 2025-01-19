@@ -31,8 +31,7 @@ app = FastAPI(
     title="Box8 API",
     description="API Backend pour Box8",
     version="1.0.0",
-    # Set to False to handle URLs with and without trailing slashes the same way
-    redirect_slashes=False
+    redirect_slashes=True
 )
 
 # Chargement des variables d'environnement
@@ -40,47 +39,17 @@ load_dotenv()
 
 # Configuration CORS avec support des cookies
 origins = [
-    "https://box7-react-68938d4bd5ee.herokuapp.com",  # Production React frontend
-    "http://localhost:3000",  # Development React frontend
-    "http://127.0.0.1:3000",  # Alternative development URL
+    os.getenv("FRONTEND_URL", "http://localhost:3000"),  # Frontend React (URL principale)
+    os.getenv("FRONTEND_URL_ALTERNATIVE", "http://127.0.0.1:3000")  # URL alternative
 ]
 
-# Add CORS middleware first, before any other middleware or routes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
 )
-
-# Middleware to add CORS headers to every response
-@app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    response = await call_next(request)
-    origin = request.headers.get("origin")
-    
-    if origin in origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-    
-    return response
-
-# Middleware to handle preflight requests
-@app.options("/{full_path:path}")
-async def options_handler(request: Request, full_path: str):
-    origin = request.headers.get("origin")
-    if origin in origins:
-        response = Response()
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Methods"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Max-Age"] = "3600"
-        return response
-    return Response(status_code=400)
 
 # Initialisation de la base de données
 init_db()

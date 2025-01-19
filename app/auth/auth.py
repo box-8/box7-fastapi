@@ -5,26 +5,20 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from uuid import uuid4
 from passlib.context import CryptContext
-from os import getenv
-import logging
 
 from app.models.user import User, UserLogin, UserRegistration
 from app.database.database import get_user_by_email, create_user, check_user_exists
 
 # Configuration de la sécurité
-SECRET_KEY = getenv("SECRET_KEY", "votre_clé_secrète_ici")  # Must be set in production
+SECRET_KEY = "votre_clé_secrète_ici"  # À changer en production
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Configuration du hachage de mot de passe
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Set pour stocker les tokens invalidés
 invalidated_tokens: Set[str] = set()
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Vérifie si le mot de passe correspond au hash"""
@@ -111,58 +105,46 @@ async def get_current_user(session: Optional[str] = Cookie(None)) -> Optional[di
 
 async def login_user(response: Response, user_data: UserLogin):
     """Logique de connexion d'un utilisateur"""
-    try:
-        logger.info(f"Attempting login for user: {user_data.email}")
-        user = authenticate_user(user_data.email, user_data.password)
-        
-        if not user:
-            logger.warning(f"Failed login attempt for user: {user_data.email}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email ou mot de passe incorrect"
-            )
-
-        if not user["is_active"]:
-            logger.warning(f"Login attempt for inactive user: {user_data.email}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Compte désactivé"
-            )
-
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user["email"]},
-            expires_delta=access_token_expires
+    user = authenticate_user(user_data.email, user_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email ou mot de passe incorrect"
         )
 
-        # Configuration du cookie de session
-        is_production = os.getenv("ENVIRONMENT", "development") == "production"
-        
-        logger.info(f"Setting cookie for user: {user_data.email} (secure: {is_production})")
-        response.set_cookie(
-            key="session",
-            value=access_token,
-            httponly=True,
-            secure=is_production,  # True in production (HTTPS)
-            samesite="lax" if is_production else "strict",  # Use lax in production for cross-site requests
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            path="/",
+    print(f"user['is_active']: {user['is_active']}")
+    if not user["is_active"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Compte désactivé"
         )
 
-        logger.info(f"Successfully logged in user: {user_data.email}")
-        return {
-            "authenticated": True,
-            "user": {
-                "id": user["id"],
-                "email": user["email"],
-                "username": user["username"],
-                "is_active": user["is_active"],
-                "is_admin": user["is_admin"]
-            }
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user["email"]},
+        expires_delta=access_token_expires
+    )
+
+    # Configuration du cookie de session
+    response.set_cookie(
+        key="session",
+        value=access_token,
+        httponly=True,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        secure=False  # Mettre à True en production avec HTTPS
+    )
+
+    return {
+        "authenticated": True,
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "username": user["username"],
+            "is_active": user["is_active"],
+            "is_admin": user["is_admin"]
         }
-    except Exception as e:
-        logger.error(f"Unexpected error during login for user {user_data.email}: {str(e)}")
-        raise
+    }
 
 async def register_user(user_data: UserRegistration):
     """Logique d'enregistrement d'un nouvel utilisateur"""
@@ -208,52 +190,27 @@ async def register_user(user_data: UserRegistration):
 async def logout_user(response: Response, session: Optional[str] = Cookie(None)):
     """Logique de déconnexion d'un utilisateur"""
     if session:
-        # Invalider le token
         invalidate_token(session)
-        
-        # Supprimer le cookie avec les mêmes paramètres que lors de sa création
-        cookie_domain = os.getenv("COOKIE_DOMAIN", None)
-        is_production = os.getenv("ENVIRONMENT", "development") == "production"
-        
-        response.delete_cookie(
-            key="session",
-            path="/",
-            domain=cookie_domain,
-            secure=is_production,
-            httponly=True,
-            samesite="strict"
-        )
+    
+    response.delete_cookie(
+        key="session",
+        httponly=True,
+        samesite="lax",
+        secure=False  # Mettre à True en production avec HTTPS
+    )
     
     return {"message": "Déconnecté avec succès"}
 
 async def check_auth_status(session: Optional[str] = Cookie(None)):
-    """Vérifie si l'utilisateur est authentifié via le cookie de session"""
+    """Vérifie le statut d'authentification d'un utilisateur"""
+    if not session:
+        return {"authenticated": False}
+
     try:
-        if not session:
-            logger.info("No session cookie found")
+        user = await get_current_user(session)
+        if not user:
             return {"authenticated": False}
 
-        if not is_token_valid(session):
-            logger.warning("Invalid session token found")
-            return {"authenticated": False}
-
-        payload = jwt.decode(session, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        
-        if email is None:
-            logger.warning("No email found in session token")
-            return {"authenticated": False}
-
-        user = get_user(email)
-        if user is None:
-            logger.warning(f"No user found for email: {email}")
-            return {"authenticated": False}
-
-        if not user["is_active"]:
-            logger.warning(f"Inactive user attempted authentication: {email}")
-            return {"authenticated": False}
-
-        logger.info(f"Successfully authenticated user: {email}")
         return {
             "authenticated": True,
             "user": {
@@ -264,11 +221,7 @@ async def check_auth_status(session: Optional[str] = Cookie(None)):
                 "is_admin": user["is_admin"]
             }
         }
-    except JWTError as e:
-        logger.error(f"JWT Error during auth check: {str(e)}")
-        return {"authenticated": False}
-    except Exception as e:
-        logger.error(f"Unexpected error during auth check: {str(e)}")
+    except HTTPException:
         return {"authenticated": False}
 
 async def get_current_user_info(session: Optional[str] = Cookie(None)):
