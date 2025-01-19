@@ -40,7 +40,8 @@ load_dotenv()
 # Configuration CORS avec support des cookies
 origins = [
     os.getenv("FRONTEND_URL", "http://localhost:3000"),  # Frontend React (URL principale)
-    os.getenv("FRONTEND_URL_ALTERNATIVE", "http://127.0.0.1:3000")  # URL alternative
+    os.getenv("FRONTEND_URL_ALTERNATIVE", "http://127.0.0.1:3000"),  # URL alternative
+    "https://box7-react-68938d4bd5ee.herokuapp.com/"  # URL de production
 ]
 
 app.add_middleware(
