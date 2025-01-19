@@ -61,6 +61,18 @@ def is_token_valid(token: str) -> bool:
     """Vérifie si un token est valide (non blacklisté)"""
     return token not in invalidated_tokens
 
+def set_session_cookie(response: Response, access_token: str) -> None:
+    """Configure le cookie de session avec les paramètres de sécurité appropriés"""
+    response.set_cookie(
+        key="session",
+        value=access_token,
+        httponly=True,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        secure=True,  # Nécessaire pour HTTPS sur Heroku
+        domain=os.getenv("COOKIE_DOMAIN", None)  # Domaine pour Heroku
+    )
+
 async def get_current_user(session: Optional[str] = Cookie(None)) -> Optional[dict]:
     """Récupère l'utilisateur actuellement connecté à partir du cookie de session"""
     if not session:
@@ -126,16 +138,8 @@ async def login_user(response: Response, user_data: UserLogin):
         expires_delta=access_token_expires
     )
 
-    # Configuration du cookie de session
-    response.set_cookie(
-        key="session",
-        value=access_token,
-        httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
-        secure=True,  # Nécessaire pour HTTPS sur Heroku
-        domain=os.getenv("COOKIE_DOMAIN", None)  # Domaine pour Heroku
-    )
+    # Utilisation de la fonction utilitaire
+    set_session_cookie(response, access_token)
 
     return {
         "authenticated": True,

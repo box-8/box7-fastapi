@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Response,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from app.routes.auth import router as auth_router
-from app.auth.auth import get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.auth.auth import get_current_user, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, set_session_cookie
 from app.routes.admin import router as admin_router
 from app.websocket.manager import manager
 from app.database.database import init_db
@@ -94,15 +94,8 @@ async def extend_session_middleware(request: Request, call_next):
                     expires_delta=access_token_expires
                 )
                 
-                # Mettre à jour le cookie de session
-                response.set_cookie(
-                    key="session",
-                    value=access_token,
-                    httponly=True,
-                    max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-                    samesite="lax",
-                    secure=False  # Mettre à True en production avec HTTPS
-                )
+                # Utiliser la fonction utilitaire pour mettre à jour le cookie
+                set_session_cookie(response, access_token)
         except HTTPException:
             # Si le token est invalide, on ne fait rien
             pass
